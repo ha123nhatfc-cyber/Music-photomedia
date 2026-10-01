@@ -1,0 +1,21 @@
+const express=require("express"),multer=require("multer"),fs=require("fs"),path=require("path"),crypto=require("crypto");
+const {Readable}=require("stream"); let sharp=null; try{sharp=require("sharp")}catch{}
+const PORT=Number(process.env.PORT||3000),HOST=process.env.HOST||"0.0.0.0",KEY=process.env.JAMENDO_CLIENT_ID;
+const MEDIA_DIR=path.resolve(process.env.STORAGE_DIR||path.join(__dirname,"storage")),MUSIC_DIR=path.resolve(process.env.MUSIC_DIR||path.join(__dirname,"music")),THUMBS=path.join(MEDIA_DIR,".thumbs");
+[MEDIA_DIR,MUSIC_DIR,THUMBS].forEach(x=>fs.mkdirSync(x,{recursive:true}));
+const IMG=/\.(jpe?g|png|gif|webp|avif|heic)$/i,VID=/\.(mp4|mov|webm|mkv|m4v)$/i,AUDIO=/\.(mp3|m4a|flac|ogg|wav)$/i;
+const mediaUpload=multer({storage:multer.diskStorage({destination:MEDIA_DIR,filename:(q,f,cb)=>{const n=Buffer.from(f.originalname,"latin1").toString("utf8").replace(/[^\w.\-() ]/g,"_");cb(null,`${Date.now()}-${crypto.randomBytes(3).toString("hex")}-${n}`)}}),fileFilter:(q,f,cb)=>cb(null,/^(image|video)\//.test(f.mimetype))});
+const musicUpload=multer({storage:multer.diskStorage({destination:MUSIC_DIR,filename:(q,f,cb)=>cb(null,Buffer.from(f.originalname,"latin1").toString("utf8").replace(/[^\w.\-() ]/g,"_"))}),fileFilter:(q,f,cb)=>cb(null,/^audio\//.test(f.mimetype))});
+const app=express();app.disable("x-powered-by");app.use(express.static(path.join(__dirname,"public")));
+app.use("/files",express.static(MEDIA_DIR,{acceptRanges:true,dotfiles:"deny"}));app.use("/music",express.static(MUSIC_DIR,{acceptRanges:true}));
+app.get("/api/files",(q,s)=>{try{s.json(fs.readdirSync(MEDIA_DIR).filter(n=>IMG.test(n)||VID.test(n)).map(n=>{const x=fs.statSync(path.join(MEDIA_DIR,n));return{name:n,size:x.size,time:x.mtimeMs,type:VID.test(n)?"video":"image"}}).sort((a,b)=>b.time-a.time))}catch{s.status(500).json({error:"Không đọc được kho media"})}});
+app.post("/api/upload",mediaUpload.array("files"),(q,s)=>s.json({ok:true,count:q.files?.length||0}));
+app.get("/thumb/:name",async(q,s)=>{const n=path.basename(q.params.name),i=path.join(MEDIA_DIR,n),o=path.join(THUMBS,n+".webp");try{if(!fs.existsSync(i))return s.sendStatus(404);if(!sharp)throw Error();if(!fs.existsSync(o))await sharp(i).rotate().resize(480).webp({quality:80}).toFile(o);s.sendFile(o)}catch{s.redirect("/files/"+encodeURIComponent(n))}});
+app.get("/download/:name",(q,s)=>s.download(path.join(MEDIA_DIR,path.basename(q.params.name))));
+app.delete("/api/files/:name",(q,s)=>{const n=path.basename(q.params.name);fs.rmSync(path.join(MEDIA_DIR,n),{force:true});fs.rmSync(path.join(THUMBS,n+".webp"),{force:true});s.json({ok:true})});
+app.get("/api/search",async(q,s)=>{if(!KEY)return s.status(500).json({error:"Chưa đặt JAMENDO_CLIENT_ID"});const x=String(q.query.q||"").trim();if(!x)return s.json([]);try{const u=`https://api.jamendo.com/v3.0/tracks/?client_id=${KEY}&format=json&limit=30&audiodownload_allowed=true&search=${encodeURIComponent(x)}`,j=await(await fetch(u)).json();s.json((j.results||[]).map(t=>({id:"jm"+t.id,title:t.name,artist:t.artist_name,cover:t.album_image,stream:t.audio})))}catch{s.status(502).json({error:"Không kết nối được nguồn nhạc"})}});
+app.get("/api/audio",async(q,s)=>{try{const u=new URL(String(q.query.url));if(u.protocol!=="https:"||!(u.hostname==="jamendo.com"||u.hostname.endsWith(".jamendo.com")))return s.sendStatus(403);const r=await fetch(u,{redirect:"follow"});if(!r.ok)return s.sendStatus(502);s.set("Content-Type",r.headers.get("content-type")||"audio/mpeg");Readable.fromWeb(r.body).pipe(s)}catch{s.sendStatus(400)}});
+app.get("/api/library",(q,s)=>s.json(fs.readdirSync(MUSIC_DIR).filter(n=>AUDIO.test(n)).map(n=>({id:"my"+n,title:n.replace(AUDIO,""),artist:"Của tôi",cover:"",stream:"/music/"+encodeURIComponent(n)}))));
+app.post("/api/library",musicUpload.array("files"),(q,s)=>s.json({ok:true,count:q.files?.length||0}));
+app.get("*",(q,s)=>s.sendFile(path.join(__dirname,"public","index.html")));
+app.listen(PORT,HOST,()=>console.log(`Web Suite listening on ${HOST}:${PORT}`));

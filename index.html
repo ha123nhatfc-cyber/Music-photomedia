@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kho Media & File Bảo Mật</title>
+    <!-- Thư viện hỗ trợ giải nén File ZIP trực tiếp trên thiết bị -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #0d0d12;
+            color: #f0f0f5;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 22px;
+            margin: 10px 0 20px 0;
+            color: #00e676;
+            text-shadow: 0 0 10px rgba(0, 230, 118, 0.3);
+        }
+
+        .card {
+            background-color: #181822;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            border: 1px solid #282838;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #9a9ab0;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #3a3a50;
+            background-color: #222230;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            outline: none;
+        }
+
+        input[type="password"]:focus { border-color: #00e676; }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn:active { opacity: 0.8; }
+        .btn-primary { background-color: #00e676; color: #051a0e; }
+        .btn-success { background: linear-gradient(135deg, #29b6f6, #0288d1); color: #fff; margin-bottom: 10px; }
+        .btn-danger { background-color: #ff5252; color: #fff; }
+
+        .hidden { display: none !important; }
+        .action-bar { margin-bottom: 20px; }
+
+        #loading {
+            text-align: center;
+            padding: 12px;
+            color: #ffca28;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .media-card {
+            position: relative;
+            background: #222230;
+            border-radius: 10px;
+            overflow: hidden;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #3a3a50;
+        }
+
+        .media-card img, .media-card video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            max-height: 1080px;
+        }
+
+        .media-tag {
+            position: absolute;
+            bottom: 6px; left: 6px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            font-size: 10px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            backdrop-filter: blur(4px);
+        }
+
+        .action-btns {
+            position: absolute;
+            top: 6px; right: 6px;
+            display: flex;
+            gap: 6px;
+            z-index: 2;
+        }
+
+        .icon-btn {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px; height: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+
+        .icon-btn.delete { background: rgba(255, 30, 30, 0.85); }
+        .icon-btn.download { background: rgba(0, 230, 118, 0.85); color: #000; }
+
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .modal-content {
+            max-width: 100%;
+            max-height: 90vh;
+            border-radius: 8px;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px; right: 20px;
+            color: #fff;
+            font-size: 30px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🔒 Kho Media & File Bảo Mật</h1>
+
+        <!-- Màn hình Đăng nhập -->
+        <div id="auth-section" class="card">
+            <h3>Nhập Mã Khóa Bảo Mật</h3>
+            <p class="subtitle">Mật khẩu này dùng để mã hóa & giải mã toàn bộ dữ liệu gốc của bạn.</p>
+            <input type="password" id="secret-key" placeholder="Nhập mật khẩu / mã PIN...">
+            <button id="btn-unlock" class="btn btn-primary">Mở Khóa Kho Media</button>
+        </div>
+
+        <!-- Màn hình Quản lý Media -->
+        <div id="app-section" class="card hidden">
+            <div class="action-bar">
+                <!-- KHẮC PHỤC LỖI MẤT THƯ VIỆN: Khai báo đầy đủ các chuẩn định dạng image/*, video/* và tệp ZIP -->
+                <label for="media-input" class="btn btn-success">+ Chọn Tệp / File Zip / Thư viện</label>
+                <input type="file" id="media-input" accept="image/*,video/*,.zip,application/zip,application/x-zip-compressed" multiple style="display: none;">
+                <button id="btn-lock" class="btn btn-danger">Khóa Ứng Dụng</button>
+            </div>
+
+            <div id="loading" class="hidden">🔄 Đang giải mã & nạp dữ liệu gốc...</div>
+            <div id="media-gallery" class="media-grid"></div>
+        </div>
+    </div>
+
+    <!-- Modal Xem phóng to -->
+    <div id="preview-modal" class="modal hidden">
+        <span class="close-modal" id="close-modal-btn">&times;</span>
+        <div id="modal-body" style="width:100%; display:flex; justify-content:center;"></div>
+    </div>
+
+    <script>
+        let db = null;
+        let cryptoKey = null;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("EncryptedVaultDB_v2", 1);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains("media")) {
+                        db.createObjectStore("media", { keyPath: "id", autoIncrement: true });
+                    }
+                };
+                request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+                request.onerror = (e) => reject("Lỗi DB: " + e.target.error);
+            });
+        }
+
+        async function deriveKey(password) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
+            );
+            const salt = enc.encode("VaultOfflineSalt2026");
+            return crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encryptData(arrayBuffer) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encryptedContent = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv }, cryptoKey, arrayBuffer
+            );
+            return { iv: Array.from(iv), data: encryptedContent };
+        }
+
+        async function decryptData(encryptedObj) {
+            const iv = new Uint8Array(encryptedObj.iv);
+            return await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv }, cryptoKey, encryptedObj.data
+            );
+        }
+
+        function saveToDB(item) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction("media", "readwrite");
+                tx.objectStore("media").add(item);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        function getAllFromDB() {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction("media", "readonly");
+                const request = tx.objectStore("media").getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function deleteFromDB(id) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction("media", "readwrite");
+                tx.objectStore("media").delete(id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            await initDB();
+
+            const authSection = document.getElementById("auth-section");
+            const appSection = document.getElementById("app-section");
+            const secretInput = document.getElementById("secret-key");
+            const gallery = document.getElementById("media-gallery");
+            const loading = document.getElementById("loading");
+            const modal = document.getElementById("preview-modal");
+            const modalBody = document.getElementById("modal-body");
+
+            document.getElementById("btn-unlock").addEventListener("click", async () => {
+                const password = secretInput.value.trim();
+                if (!password) return alert("Vui lòng nhập mật khẩu!");
+
+                try {
+                    cryptoKey = await deriveKey(password);
+                    authSection.classList.add("hidden");
+                    appSection.classList.remove("hidden");
+                    await renderGallery();
+                } catch (err) { alert("Có lỗi xảy ra khi tạo khóa!"); }
+            });
+
+            document.getElementById("btn-lock").addEventListener("click", () => {
+                cryptoKey = null;
+                secretInput.value = "";
+                gallery.innerHTML = "";
+                appSection.classList.add("hidden");
+                authSection.classList.remove("hidden");
+            });
+
+            // Xử lý nạp File & Thư viện
+            document.getElementById("media-input").addEventListener("change", async (e) => {
+                const files = e.target.files;
+                if (!files.length) return;
+
+                loading.classList.remove("hidden");
+
+                for (let file of files) {
+                    // Nếu là File Zip -> Xử lý giải nén tự động
+                    if (file.name.endsWith('.zip') || file.type.includes("zip")) {
+                        try {
+                            const zip = await JSZip.loadAsync(file);
+                            for (let filename of Object.keys(zip.files)) {
+                                const zipEntry = zip.files[filename];
+                                if (!zipEntry.dir) {
+                                    const arrayBuffer = await zipEntry.async("arraybuffer");
+                                    const mimeType = getMimeType(filename);
+                                    await saveEncryptedFile(arrayBuffer, filename, mimeType);
+                                }
+                            }
+                        } catch (err) {
+                            alert("Lỗi đọc File Zip: " + err.message);
+                        }
+                    } else {
+                        // File Ảnh/Video đơn lẻ từ Thư viện hoặc Tệp
+                        const arrayBuffer = await file.arrayBuffer();
+                        await saveEncryptedFile(arrayBuffer, file.name, file.type || getMimeType(file.name));
+                    }
+                }
+
+                e.target.value = "";
+                await renderGallery();
+                loading.classList.add("hidden");
+            });
+
+            async function saveEncryptedFile(arrayBuffer, name, type) {
+                const encrypted = await encryptData(arrayBuffer);
+                await saveToDB({
+                    iv: encrypted.iv,
+                    data: encrypted.data,
+                    type: type,
+                    name: name,
+                    created: Date.now()
+                });
+            }
+
+            function getMimeType(fileName) {
+                const ext = fileName.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)) return `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+                if (['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) return `video/${ext === 'mov' ? 'quicktime' : ext}`;
+                return 'application/octet-stream';
+            }
+
+            // Hiển thị danh sách Media
+            async function renderGallery() {
+                gallery.innerHTML = "";
+                const items = await getAllFromDB();
+
+                if (items.length === 0) {
+                    gallery.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #7a7a90; padding: 20px 0;">Chưa có tệp Media nào.</p>`;
+                    return;
+                }
+
+                for (let item of items) {
+                    try {
+                        const decryptedBuffer = await decryptData(item);
+                        // Tạo Blob dữ liệu gốc nguyên bản 100%
+                        const blob = new Blob([decryptedBuffer], { type: item.type });
+                        const blobUrl = URL.createObjectURL(blob);
+
+                        const card = document.createElement("div");
+                        card.className = "media-card";
+
+                        const isVideo = item.type.startsWith("video/");
+                        const isImage = item.type.startsWith("image/");
+
+                        if (isVideo) {
+                            card.innerHTML = `
+                                <video src="${blobUrl}#t=0.5" preload="metadata"></video>
+                                <span class="media-tag">VIDEO</span>
+                            `;
+                        } else if (isImage) {
+                            card.innerHTML = `
+                                <img src="${blobUrl}" alt="Decrypted Media">
+                                <span class="media-tag">ẢNH</span>
+                            `;
+                        } else {
+                            card.innerHTML = `
+                                <div style="font-size:30px;">📄</div>
+                                <span class="media-tag">FILE</span>
+                            `;
+                        }
+
+                        // Thêm nút Thao tác (Tải về nguyên bản & Xóa)
+                        const actionDiv = document.createElement("div");
+                        actionDiv.className = "action-btns";
+
+                        const downloadBtn = document.createElement("button");
+                        downloadBtn.className = "icon-btn download";
+                        downloadBtn.innerHTML = "⬇";
+                        downloadBtn.title = "Tải về chất lượng gốc";
+                        downloadBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            downloadOriginal(blobUrl, item.name);
+                        };
+
+                        const deleteBtn = document.createElement("button");
+                        deleteBtn.className = "icon-btn delete";
+                        deleteBtn.innerHTML = "✕";
+                        deleteBtn.onclick = (e) => removeMedia(e, item.id);
+
+                        actionDiv.appendChild(downloadBtn);
+                        actionDiv.appendChild(deleteBtn);
+                        card.appendChild(actionDiv);
+
+                        card.addEventListener("click", () => {
+                            if (isImage || isVideo) openModal(blobUrl, isVideo);
+                        });
+
+                        gallery.appendChild(card);
+                    } catch (err) {
+                        alert("Mật khẩu không khớp hoặc dữ liệu bị hỏng!");
+                        document.getElementById("btn-lock").click();
+                        break;
+                    }
+                }
+            }
+
+            // Tải về file nguyên bản giữ nguyên 100% chất lượng gốc
+            function downloadOriginal(url, filename) {
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename || "restored_file";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+
+            function openModal(url, isVideo) {
+                modalBody.innerHTML = "";
+                if (isVideo) {
+                    const videoElem = document.createElement("video");
+                    videoElem.src = url;
+                    videoElem.controls = true;
+                    videoElem.autoplay = true;
+                    videoElem.className = "modal-content";
+                    modalBody.appendChild(videoElem);
+                } else {
+                    const imgElem = document.createElement("img");
+                    imgElem.src = url;
+                    imgElem.className = "modal-content";
+                    modalBody.appendChild(imgElem);
+                }
+                modal.classList.remove("hidden");
+            }
+
+            document.getElementById("close-modal-btn").addEventListener("click", () => {
+                modal.classList.add("hidden");
+                modalBody.innerHTML = "";
+            });
+
+            window.removeMedia = async (e, id) => {
+                e.stopPropagation();
+                if (confirm("Xóa tệp này khỏi kho bảo mật?")) {
+                    await deleteFromDB(id);
+                    await renderGallery();
+                }
+            };
+        });
+    </script>
+</body>
+</html>
+
